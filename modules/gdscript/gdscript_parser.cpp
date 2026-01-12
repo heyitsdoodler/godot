@@ -3034,6 +3034,10 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_binary_operator(Expression
 			operation->operation = BinaryOpNode::OP_LOGIC_OR;
 			operation->variant_op = Variant::OP_OR;
 			break;
+		case GDScriptTokenizer::Token::QUESTION_QUESTION:
+			operation->operation = BinaryOpNode::OP_NULL_COALESCE;
+			operation->variant_op = Variant::OP_NULL_COALESCE;
+			break;
 		case GDScriptTokenizer::Token::TK_IN:
 			operation->operation = BinaryOpNode::OP_CONTENT_TEST;
 			operation->variant_op = Variant::OP_IN;
@@ -3144,6 +3148,10 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_assignment(ExpressionNode 
 	switch (previous.type) {
 		case GDScriptTokenizer::Token::EQUAL:
 			assignment->operation = AssignmentNode::OP_NONE;
+			assignment->variant_op = Variant::OP_MAX;
+			break;
+		case GDScriptTokenizer::Token::QUESTION_QUESTION_EQUAL:
+			assignment->operation = AssignmentNode::OP_NULL_COALESCE;
 			assignment->variant_op = Variant::OP_MAX;
 			break;
 		case GDScriptTokenizer::Token::PLUS_EQUAL:
@@ -3823,6 +3831,7 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_invalid_token(ExpressionNo
 	// Just for better error messages.
 	GDScriptTokenizer::Token::Type invalid = previous.type;
 
+	// FIXME: This path is no longer being reached for question marks
 	switch (invalid) {
 		case GDScriptTokenizer::Token::QUESTION_MARK:
 			push_error(R"(Unexpected "?" in source. If you want a ternary operator, use "truthy_value if true_condition else falsy_value".)");
@@ -4224,6 +4233,8 @@ GDScriptParser::ParseRule *GDScriptParser::get_rule(GDScriptTokenizer::Token::Ty
 		{ nullptr,                                          &GDScriptParser::parse_binary_operator,			PREC_LOGIC_AND }, // AMPERSAND_AMPERSAND,
 		{ nullptr,                                          &GDScriptParser::parse_binary_operator,			PREC_LOGIC_OR }, // PIPE_PIPE,
 		{ &GDScriptParser::parse_unary_operator,			nullptr,                                        PREC_NONE }, // BANG,
+		{ nullptr,                                          &GDScriptParser::parse_binary_operator,			PREC_TYPE_TEST }, // QUESTION_QUESTION,
+
 		// Bitwise
 		{ nullptr,                                          &GDScriptParser::parse_binary_operator,      	PREC_BIT_AND }, // AMPERSAND,
 		{ nullptr,                                          &GDScriptParser::parse_binary_operator,      	PREC_BIT_OR }, // PIPE,
@@ -4251,6 +4262,7 @@ GDScriptParser::ParseRule *GDScriptParser::get_rule(GDScriptTokenizer::Token::Ty
 		{ nullptr,                                          &GDScriptParser::parse_assignment,           	PREC_ASSIGNMENT }, // AMPERSAND_EQUAL,
 		{ nullptr,                                          &GDScriptParser::parse_assignment,           	PREC_ASSIGNMENT }, // PIPE_EQUAL,
 		{ nullptr,                                          &GDScriptParser::parse_assignment,           	PREC_ASSIGNMENT }, // CARET_EQUAL,
+		{ nullptr,                                          &GDScriptParser::parse_assignment,           	PREC_ASSIGNMENT }, // QUESTION_QUESTION_EQUAL,
 		// Control flow
 		{ nullptr,                                          &GDScriptParser::parse_ternary_operator,     	PREC_TERNARY }, // IF,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // ELIF,
@@ -4302,6 +4314,7 @@ GDScriptParser::ParseRule *GDScriptParser::get_rule(GDScriptTokenizer::Token::Ty
 		{ &GDScriptParser::parse_get_node,               	nullptr,                                        PREC_NONE }, // DOLLAR,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // FORWARD_ARROW,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // UNDERSCORE,
+		{ nullptr,                                          &GDScriptParser::parse_invalid_token,        	  PREC_CAST }, // QUESTION_MARK,
 		// Whitespace
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // NEWLINE,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // INDENT,
@@ -4314,7 +4327,6 @@ GDScriptParser::ParseRule *GDScriptParser::get_rule(GDScriptTokenizer::Token::Ty
 		// Error message improvement
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // VCS_CONFLICT_MARKER,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // BACKTICK,
-		{ nullptr,                                          &GDScriptParser::parse_invalid_token,        	PREC_CAST }, // QUESTION_MARK,
 		// Special
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // ERROR,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // TK_EOF,
@@ -5738,6 +5750,9 @@ void GDScriptParser::TreePrinter::print_assignment(AssignmentNode *p_assignment)
 		case AssignmentNode::OP_BIT_XOR:
 			push_text("^");
 			break;
+		case AssignmentNode::OP_NULL_COALESCE:
+			push_text("??");
+			break;
 		case AssignmentNode::OP_NONE:
 			break;
 	}
@@ -5794,6 +5809,9 @@ void GDScriptParser::TreePrinter::print_binary_op(BinaryOpNode *p_binary_op) {
 			break;
 		case BinaryOpNode::OP_LOGIC_OR:
 			push_text(" OR ");
+			break;
+		case BinaryOpNode::OP_NULL_COALESCE:
+			push_text(" ?? ");
 			break;
 		case BinaryOpNode::OP_CONTENT_TEST:
 			push_text(" IN ");

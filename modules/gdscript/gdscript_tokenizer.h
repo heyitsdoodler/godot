@@ -66,6 +66,7 @@ public:
 			AMPERSAND_AMPERSAND,
 			PIPE_PIPE,
 			BANG,
+			QUESTION_QUESTION,
 			// Bitwise
 			AMPERSAND,
 			PIPE,
@@ -93,6 +94,7 @@ public:
 			AMPERSAND_EQUAL,
 			PIPE_EQUAL,
 			CARET_EQUAL,
+			QUESTION_QUESTION_EQUAL,
 			// Control flow
 			IF,
 			ELIF,
@@ -144,6 +146,7 @@ public:
 			DOLLAR,
 			FORWARD_ARROW,
 			UNDERSCORE,
+			QUESTION_MARK,
 			// Whitespace
 			NEWLINE,
 			INDENT,
@@ -156,7 +159,6 @@ public:
 			// Error message improvement
 			VCS_CONFLICT_MARKER,
 			BACKTICK,
-			QUESTION_MARK,
 			// Special
 			ERROR,
 			TK_EOF, // "EOF" is reserved

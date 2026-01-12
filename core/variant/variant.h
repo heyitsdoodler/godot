@@ -610,6 +610,7 @@ public:
 		OP_OR,
 		OP_XOR,
 		OP_NOT,
+		OP_NULL_COALESCE,
 		//containment
 		OP_IN,
 		OP_MAX

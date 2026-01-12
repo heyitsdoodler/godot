@@ -61,6 +61,7 @@ static const char *token_names[] = {
 	"&&", // AMPERSAND_AMPERSAND,
 	"||", // PIPE_PIPE,
 	"!", // BANG,
+	"??", // QUESTION_QUESTION,
 	// Bitwise
 	"&", // AMPERSAND,
 	"|", // PIPE,
@@ -88,6 +89,7 @@ static const char *token_names[] = {
 	"&=", // AMPERSAND_EQUAL,
 	"|=", // PIPE_EQUAL,
 	"^=", // CARET_EQUAL,
+	"?\?=", // QUESTION_QUESTION_EQUAL, // "Clangd: Trigraph ignored" when question mark is not escaped
 	// Control flow
 	"if", // IF,
 	"elif", // ELIF,
@@ -139,6 +141,7 @@ static const char *token_names[] = {
 	"$", // DOLLAR,
 	"->", // FORWARD_ARROW,
 	"_", // UNDERSCORE,
+	"?", // QUESTION_MARK,
 	// Whitespace
 	"Newline", // NEWLINE,
 	"Indent", // INDENT,
@@ -151,7 +154,6 @@ static const char *token_names[] = {
 	// Error message improvement
 	"VCS conflict marker", // VCS_CONFLICT_MARKER,
 	"`", // BACKTICK,
-	"?", // QUESTION_MARK,
 	// Special
 	"Error", // ERROR,
 	"End of file", // EOF,
@@ -1453,8 +1455,6 @@ GDScriptTokenizer::Token GDScriptTokenizerText::scan() {
 			return make_token(Token::SEMICOLON);
 		case '$':
 			return make_token(Token::DOLLAR);
-		case '?':
-			return make_token(Token::QUESTION_MARK);
 		case '`':
 			return make_token(Token::BACKTICK);
 
@@ -1484,7 +1484,7 @@ GDScriptTokenizer::Token GDScriptTokenizerText::scan() {
 			}
 			return make_token(Token::BRACE_CLOSE);
 
-		// Double characters.
+		// Double (or Triple) characters.
 		case '!':
 			if (_peek() == '=') {
 				_advance();
@@ -1591,7 +1591,20 @@ GDScriptTokenizer::Token GDScriptTokenizerText::scan() {
 			} else {
 				return make_token(Token::PIPE);
 			}
+		case '?':
 
+			if (_peek() == '?') {
+				_advance();
+
+				if (_peek() == '=') {
+					_advance();
+					return make_token(Token::QUESTION_QUESTION_EQUAL);
+				}
+
+				return make_token(Token::QUESTION_QUESTION);
+			}
+
+			return make_token(Token::QUESTION_MARK);
 		// Potential VCS conflict markers.
 		case '=':
 			if (_peek() == '=') {

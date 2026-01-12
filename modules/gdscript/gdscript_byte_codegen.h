@@ -152,7 +152,7 @@ class GDScriptByteCodeGenerator : public GDScriptCodeGenerator {
 	List<int> while_jmp_addrs;
 	List<int> continue_addrs;
 
-	// Used to patch jumps with `and` and `or` operators with short-circuit.
+	// Used to patch jumps with `and`, `or`, and `??` operators with short-circuit.
 	List<int> logic_op_jump_pos1;
 	List<int> logic_op_jump_pos2;
 
@@ -491,6 +491,8 @@ public:
 	virtual void write_or_left_operand(const Address &p_left_operand) override;
 	virtual void write_or_right_operand(const Address &p_right_operand) override;
 	virtual void write_end_or(const Address &p_target) override;
+	virtual void write_null_coalesce(const Address &result, const Address &p_left_operand) override;
+	virtual void write_end_null_coalesce(const Address &result, const Address &p_right_operand) override;
 	virtual void write_start_ternary(const Address &p_target) override;
 	virtual void write_ternary_condition(const Address &p_condition) override;
 	virtual void write_ternary_true_expr(const Address &p_expr) override;
@@ -540,6 +542,10 @@ public:
 	virtual void write_endif() override;
 	virtual void write_jump_if_shared(const Address &p_value) override;
 	virtual void write_end_jump_if_shared() override;
+	virtual void write_jump_if_null(const Address &p_value) override;
+	virtual void write_end_jump_if_null() override;
+	virtual void write_jump_if_not_null(const Address &p_value) override;
+	virtual void write_end_jump_if_not_null() override;
 	virtual void start_for(const GDScriptDataType &p_iterator_type, const GDScriptDataType &p_list_type, bool p_is_range) override;
 	virtual void write_for_list_assignment(const Address &p_list) override;
 	virtual void write_for_range_assignment(const Address &p_from, const Address &p_to, const Address &p_step) override;

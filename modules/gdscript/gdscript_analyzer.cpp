@@ -2960,7 +2960,7 @@ void GDScriptAnalyzer::reduce_assignment(GDScriptParser::AssignmentNode *p_assig
 	bool downgrades_assignee = false;
 	bool downgrades_assigned = false;
 	GDScriptParser::DataType op_type = assigned_value_type;
-	if (p_assignment->operation != GDScriptParser::AssignmentNode::OP_NONE && !op_type.is_variant()) {
+	if (p_assignment->operation != GDScriptParser::AssignmentNode::OP_NONE && p_assignment->operation != GDScriptParser::AssignmentNode::OP_NULL_COALESCE && !op_type.is_variant()) {
 		op_type = get_operation_type(p_assignment->variant_op, assignee_type, assigned_value_type, compatible, p_assignment->assigned_value);
 
 		if (assignee_is_variant) {
@@ -3040,7 +3040,7 @@ void GDScriptAnalyzer::reduce_assignment(GDScriptParser::AssignmentNode *p_assig
 		parser->push_warning(p_assignment->assigned_value, GDScriptWarning::NARROWING_CONVERSION);
 	}
 	// Check for assignment with operation before assignment.
-	if (p_assignment->operation != GDScriptParser::AssignmentNode::OP_NONE && p_assignment->assignee->type == GDScriptParser::Node::IDENTIFIER) {
+	if (p_assignment->operation != GDScriptParser::AssignmentNode::OP_NONE && p_assignment->operation != GDScriptParser::AssignmentNode::OP_NULL_COALESCE  && p_assignment->assignee->type == GDScriptParser::Node::IDENTIFIER) {
 		GDScriptParser::IdentifierNode *id = static_cast<GDScriptParser::IdentifierNode *>(p_assignment->assignee);
 		// Use == 1 here because this assignment was already counted in the beginning of the function.
 		if (id->source == GDScriptParser::IdentifierNode::LOCAL_VARIABLE && id->variable_source && id->variable_source->assignments == 1) {
@@ -3100,6 +3100,12 @@ void GDScriptAnalyzer::reduce_binary_op(GDScriptParser::BinaryOpNode *p_binary_o
 	if (!left_type.is_set() || !right_type.is_set()) {
 		return;
 	}
+
+	// Handle null coalescing
+	if (p_binary_op->operation == GDScriptParser::BinaryOpNode::OP_NULL_COALESCE) {
+		return;
+	}
+
 
 #ifdef DEBUG_ENABLED
 	if (p_binary_op->variant_op == Variant::OP_DIVIDE &&

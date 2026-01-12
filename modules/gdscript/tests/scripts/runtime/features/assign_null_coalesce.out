@@ -1,0 +1,11 @@
+GDTEST_OK
+10
+5
+10
+10
+10
+5
+<null>
+{ "foo": false, "bar": true, "baz": true, &"buzz": false, &"fizz": true }
+true
+true

@@ -419,6 +419,8 @@ public:
 		// Assignment is not really an expression but it's easier to parse as if it were.
 		enum Operation {
 			OP_NONE,
+			OP_NULL_COALESCE,
+			// Arithmetic operations
 			OP_ADDITION,
 			OP_SUBTRACTION,
 			OP_MULTIPLICATION,
@@ -466,6 +468,7 @@ public:
 			OP_BIT_XOR,
 			OP_LOGIC_AND,
 			OP_LOGIC_OR,
+			OP_NULL_COALESCE,
 			OP_CONTENT_TEST,
 			OP_COMP_EQUAL,
 			OP_COMP_NOT_EQUAL,

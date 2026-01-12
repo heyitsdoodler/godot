@@ -902,6 +902,19 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 						gen->pop_temporary();
 					}
 				} break;
+				case GDScriptParser::BinaryOpNode::OP_NULL_COALESCE: {
+					GDScriptCodeGenerator::Address left_operand = _parse_expression(codegen, r_error, binary->left_operand);
+					gen->write_null_coalesce(result, left_operand);
+					GDScriptCodeGenerator::Address right_operand = _parse_expression(codegen, r_error, binary->right_operand);
+					gen->write_end_null_coalesce(result, right_operand);
+
+					if (right_operand.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
+						gen->pop_temporary();
+					}
+					if (left_operand.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
+						gen->pop_temporary();
+					}
+				} break;
 				default: {
 					GDScriptCodeGenerator::Address left_operand = _parse_expression(codegen, r_error, binary->left_operand);
 					GDScriptCodeGenerator::Address right_operand = _parse_expression(codegen, r_error, binary->right_operand);
@@ -1137,8 +1150,10 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 					}
 				}
 
-				// Perform operator if any.
-				if (assignment->operation != GDScriptParser::AssignmentNode::OP_NONE) {
+				bool is_null_coalescing_assignment = assignment->operation == GDScriptParser::AssignmentNode::OP_NULL_COALESCE;
+
+				// Perform arithmetic operator if any.
+				if (assignment->operation != GDScriptParser::AssignmentNode::OP_NONE && !is_null_coalescing_assignment) {
 					GDScriptCodeGenerator::Address op_result = codegen.add_temporary(_gdtype_from_datatype(assignment->get_datatype(), codegen.script));
 					GDScriptCodeGenerator::Address value = codegen.add_temporary(_gdtype_from_datatype(subscript->get_datatype(), codegen.script));
 					if (subscript->is_attribute) {
@@ -1147,11 +1162,51 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 						gen->write_get(value, key, prev_base);
 					}
 					gen->write_binary_operator(op_result, assignment->variant_op, value, assigned);
-					gen->pop_temporary();
+					gen->pop_temporary(); // Pop value temporary.
 					if (assigned.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
 						gen->pop_temporary();
 					}
 					assigned = op_result;
+				} else if (is_null_coalescing_assignment) {
+					// Perform null check.
+					GDScriptDataType equality_type;
+					equality_type.kind = GDScriptDataType::BUILTIN;
+					equality_type.builtin_type = Variant::BOOL;
+
+					GDScriptCodeGenerator::Address value = codegen.add_temporary(_gdtype_from_datatype(subscript->get_datatype(), codegen.script));
+					GDScriptCodeGenerator::Address condition = codegen.add_temporary(equality_type);
+
+					if (subscript->is_attribute) {
+
+						GDScriptCodeGenerator::Address name_addr = codegen.add_constant(name);
+
+						gen->write_binary_operator(condition, Variant::OP_IN, name_addr, prev_base);
+
+						gen->write_if(condition);
+						gen->write_get_named(value, name, prev_base);
+
+						gen->write_else();
+						gen->write_assign(value, codegen.add_constant(Variant())); // Treat undefined attribute value as null
+
+						gen->write_endif();
+
+					} else {
+						gen->write_binary_operator(condition, Variant::OP_IN, key, prev_base);
+
+						gen->write_if(condition);
+						gen->write_get(value, key, prev_base);
+
+						gen->write_else();
+						gen->write_assign(value, codegen.add_constant(Variant())); // Treat undefined key value as null
+
+						gen->write_endif();
+					}
+
+					gen->pop_temporary(); // Pop condition temp.
+
+					gen->write_jump_if_not_null(value);
+
+					gen->pop_temporary(); // Pop value temp.
 				}
 
 				// Perform assignment.
@@ -1160,9 +1215,7 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 				} else {
 					gen->write_set(prev_base, key, assigned);
 				}
-				if (key.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
-					gen->pop_temporary();
-				}
+
 				if (assigned.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
 					gen->pop_temporary();
 				}
@@ -1244,6 +1297,13 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 					}
 				}
 
+				if (is_null_coalescing_assignment) {
+					gen->write_end_jump_if_not_null();
+				}
+
+				if (key.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
+					gen->pop_temporary();
+				}
 				if (assigned.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
 					gen->pop_temporary();
 				}
@@ -1255,25 +1315,38 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 				}
 
 				GDScriptCodeGenerator::Address to_assign = assigned_value;
-				bool has_operation = assignment->operation != GDScriptParser::AssignmentNode::OP_NONE;
+
+				bool is_null_coalescing_assignment = assignment->operation == GDScriptParser::AssignmentNode::OP_NULL_COALESCE;
+				bool has_arithmetic_operation = assignment->operation != GDScriptParser::AssignmentNode::OP_NONE && !is_null_coalescing_assignment;
 
 				StringName name = static_cast<GDScriptParser::IdentifierNode *>(assignment->assignee)->name;
 
-				if (has_operation) {
+				if (has_arithmetic_operation) {
 					GDScriptCodeGenerator::Address op_result = codegen.add_temporary(_gdtype_from_datatype(assignment->get_datatype(), codegen.script));
 					GDScriptCodeGenerator::Address member = codegen.add_temporary(_gdtype_from_datatype(assignment->assignee->get_datatype(), codegen.script));
 					gen->write_get_member(member, name);
 					gen->write_binary_operator(op_result, assignment->variant_op, member, assigned_value);
 					gen->pop_temporary(); // Pop member temp.
 					to_assign = op_result;
+				} else if (is_null_coalescing_assignment) {
+					// Perform null check
+					GDScriptCodeGenerator::Address member = codegen.add_temporary(_gdtype_from_datatype(assignment->assignee->get_datatype(), codegen.script));
+
+					gen->write_jump_if_not_null(member);
 				}
 
+				// Perform assignment.
 				gen->write_set_member(to_assign, name);
+
+				if (is_null_coalescing_assignment) {
+					gen->write_end_jump_if_not_null();
+					gen->pop_temporary(); // Pop member temp.
+				}
 
 				if (to_assign.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
 					gen->pop_temporary(); // Pop the assigned expression or the temp result if it has operation.
 				}
-				if (has_operation && assigned_value.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
+				if (has_arithmetic_operation && assigned_value.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
 					gen->pop_temporary(); // Pop the assigned expression if not done before.
 				}
 			} else {
@@ -1342,8 +1415,11 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 				}
 
 				GDScriptCodeGenerator::Address to_assign;
-				bool has_operation = assignment->operation != GDScriptParser::AssignmentNode::OP_NONE;
-				if (has_operation) {
+
+
+				bool is_null_coalescing_assignment = assignment->operation == GDScriptParser::AssignmentNode::OP_NULL_COALESCE;
+				bool has_arithmetic_operation = assignment->operation != GDScriptParser::AssignmentNode::OP_NONE && !is_null_coalescing_assignment;
+				if (has_arithmetic_operation) {
 					// Perform operation.
 					GDScriptCodeGenerator::Address op_result = codegen.add_temporary(_gdtype_from_datatype(assignment->get_datatype(), codegen.script));
 					GDScriptCodeGenerator::Address og_value = _parse_expression(codegen, r_error, assignment->assignee);
@@ -1353,10 +1429,24 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 					if (og_value.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
 						gen->pop_temporary();
 					}
-				} else {
+				}
+				else if (is_null_coalescing_assignment) {
+					// Perform null check.
+					GDScriptCodeGenerator::Address og_value = _parse_expression(codegen, r_error, assignment->assignee);
+
+					gen->write_jump_if_not_null(og_value);
+
+					if (og_value.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
+						gen->pop_temporary();
+					}
+
+					to_assign = assigned_value;
+				}
+				else {
 					to_assign = assigned_value;
 				}
 
+				// Perform assignment.
 				if (has_setter && !is_in_setter) {
 					// Call setter.
 					Vector<GDScriptCodeGenerator::Address> args;
@@ -1381,10 +1471,14 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 					}
 				}
 
+				if (is_null_coalescing_assignment) {
+					gen->write_end_jump_if_not_null();
+				}
+
 				if (to_assign.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
 					gen->pop_temporary(); // Pop assigned value or temp operation result.
 				}
-				if (has_operation && assigned_value.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
+				if (has_arithmetic_operation && assigned_value.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
 					gen->pop_temporary(); // Pop assigned value if not done before.
 				}
 				if (target.mode == GDScriptCodeGenerator::Address::TEMPORARY) {

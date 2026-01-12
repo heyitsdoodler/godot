@@ -750,6 +750,30 @@ void GDScriptByteCodeGenerator::write_end_or(const Address &p_target) {
 	append(p_target);
 }
 
+void GDScriptByteCodeGenerator::write_null_coalesce(const Address &p_target, const Address &p_left_operand) {
+	append_opcode(GDScriptFunction::OPCODE_JUMP_IF_NULL);
+	append(p_left_operand);
+
+	logic_op_jump_pos1.push_back(opcodes.size());
+	append(0); // Jump destination will be patched.
+
+	write_assign(p_target, p_left_operand);
+
+	append_opcode(GDScriptFunction::OPCODE_JUMP);
+	logic_op_jump_pos2.push_back(opcodes.size());
+	append(0); // Jump destination will be patched.
+}
+
+void GDScriptByteCodeGenerator::write_end_null_coalesce(const Address &p_target, const Address &p_right_operand) {
+	patch_jump(logic_op_jump_pos1.back()->get());
+	logic_op_jump_pos1.pop_back();
+
+	write_assign(p_target, p_right_operand);
+
+	patch_jump(logic_op_jump_pos2.back()->get());
+	logic_op_jump_pos2.pop_back();
+}
+
 void GDScriptByteCodeGenerator::write_start_ternary(const Address &p_target) {
 	ternary_result.push_back(p_target);
 }
@@ -1538,6 +1562,30 @@ void GDScriptByteCodeGenerator::write_jump_if_shared(const Address &p_value) {
 }
 
 void GDScriptByteCodeGenerator::write_end_jump_if_shared() {
+	patch_jump(if_jmp_addrs.back()->get());
+	if_jmp_addrs.pop_back();
+}
+
+void GDScriptByteCodeGenerator::write_jump_if_null(const Address &p_value) {
+	append_opcode(GDScriptFunction::OPCODE_JUMP_IF_NULL);
+	append(p_value);
+	if_jmp_addrs.push_back(opcodes.size());
+	append(0); // Jump destination, will be patched.
+}
+
+void GDScriptByteCodeGenerator::write_end_jump_if_null() {
+	patch_jump(if_jmp_addrs.back()->get());
+	if_jmp_addrs.pop_back();
+}
+
+void GDScriptByteCodeGenerator::write_jump_if_not_null(const Address &p_value) {
+	append_opcode(GDScriptFunction::OPCODE_JUMP_IF_NOT_NULL);
+	append(p_value);
+	if_jmp_addrs.push_back(opcodes.size());
+	append(0); // Jump destination, will be patched.
+}
+
+void GDScriptByteCodeGenerator::write_end_jump_if_not_null() {
 	patch_jump(if_jmp_addrs.back()->get());
 	if_jmp_addrs.pop_back();
 }
